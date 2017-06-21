@@ -5,6 +5,8 @@ IMAGE_INSTALL_append = " \
     libxenbe \
     displbe \
     kmscube \
+    android-tools \
+    mtouch-emul \
 "
 
 populate_append() {
