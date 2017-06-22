@@ -1,0 +1,7 @@
+diff --git a/run_adb.sh b/run_adb.sh
+index ec56aca5309a..729c9cf82490 100755
+--- a/run_adb.sh
++++ b/run_adb.sh
+@@ -1 +1 @@
+-adb exec-out cat /dev/input/event0 | ./mtouch-emul
++adb exec-out cat /dev/input/event0 | mtouch-emul

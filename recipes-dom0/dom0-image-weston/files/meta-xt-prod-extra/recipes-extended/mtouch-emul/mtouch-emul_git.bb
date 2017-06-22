@@ -7,7 +7,12 @@ SRCREV = "${AUTOREV}"
 
 S = "${WORKDIR}/git"
 
-SRC_URI = "git://github.com/andr2000/mtouch-emul.git;protocol=https"
+FILESEXTRAPATHS_prepend := "${THISDIR}/files:"
+
+SRC_URI = " \
+  git://github.com/andr2000/mtouch-emul.git;protocol=https \
+  file://run-mtouch-from-install-path.patch \
+"
 
 do_install () {
     install -d ${D}${sbindir}
