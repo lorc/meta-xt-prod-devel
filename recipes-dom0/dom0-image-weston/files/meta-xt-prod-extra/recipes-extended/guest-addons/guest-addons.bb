@@ -11,6 +11,7 @@ LIC_FILES_CHKSUM = "file://${COREBASE}/meta/COPYING.MIT;md5=3da9cfbcb788c80a0384
 
 SRC_URI = "\
   file://domu.cfg \
+  file://domu-mtouch.cfg \
   file://bridge-nfsroot.sh \
   file://bridge.sh \
   file://copy_test.sh \
