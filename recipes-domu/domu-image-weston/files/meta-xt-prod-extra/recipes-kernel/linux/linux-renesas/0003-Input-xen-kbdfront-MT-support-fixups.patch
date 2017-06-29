@@ -1,0 +1,257 @@
+From c231eca2a03765f4391e83746ad72b45dcb9aaef Mon Sep 17 00:00:00 2001
+From: Oleksandr Andrushchenko <oleksandr_andrushchenko@epam.com>
+Date: Thu, 29 Jun 2017 11:44:47 +0300
+Subject: [PATCH] Input: xen-kbdfront - MT support fixups
+
+From: Dmitry Torokhov <dmitry.torokhov@gmail.com>
+
+Signed-off-by: Dmitry Torokhov <dmitry.torokhov@gmail.com>
+---
+ drivers/input/misc/xen-kbdfront.c | 210 ++++++++++++++++++++------------------
+ 1 file changed, 109 insertions(+), 101 deletions(-)
+
+diff --git a/drivers/input/misc/xen-kbdfront.c b/drivers/input/misc/xen-kbdfront.c
+index 4d55ce89abdb..2faa65c73aac 100644
+--- a/drivers/input/misc/xen-kbdfront.c
++++ b/drivers/input/misc/xen-kbdfront.c
+@@ -60,6 +60,112 @@ static void xenkbd_disconnect_backend(struct xenkbd_info *);
+  * to do that.
+  */
+ 
++static void xenkbd_handle_motion_event(struct xenkbd_info *info,
++                                      struct xenkbd_motion *motion)
++{
++       input_report_rel(info->ptr, REL_X, motion->rel_x);
++       input_report_rel(info->ptr, REL_Y, motion->rel_y);
++       if (motion->rel_z)
++               input_report_rel(info->ptr, REL_WHEEL, -motion->rel_z);
++       input_sync(info->ptr);
++}
++
++static void xenkbd_handle_position_event(struct xenkbd_info *info,
++                                        struct xenkbd_position *pos)
++{
++       input_report_abs(info->ptr, ABS_X, pos->abs_x);
++       input_report_abs(info->ptr, ABS_Y, pos->abs_y);
++       if (pos->rel_z)
++               input_report_rel(info->ptr, REL_WHEEL, -pos->rel_z);
++       input_sync(info->ptr);
++}
++
++static void xenkbd_handle_key_event(struct xenkbd_info *info,
++                                   struct xenkbd_key *key)
++{
++       struct input_dev *dev;
++
++       if (test_bit(key->keycode, info->ptr->keybit)) {
++               dev = info->ptr;
++       } else if (test_bit(key->keycode, info->kbd->keybit)) {
++               dev = info->kbd;
++       } else {
++               pr_warn("unhandled keycode 0x%x\n", key->keycode);
++               return;
++       }
++
++       input_report_key(dev, key->keycode, key->pressed);
++       input_sync(dev);
++}
++
++static void xenkbd_handle_mt_event(struct xenkbd_info *info,
++                                  struct xenkbd_mtouch *mtouch)
++{
++       if (unlikely(!info->mtouch))
++               return;
++
++       if (mtouch->contact_id != info->mtouch_cur_contact_id) {
++               info->mtouch_cur_contact_id = mtouch->contact_id;
++               input_mt_slot(info->mtouch, mtouch->contact_id);
++       }
++
++       switch (mtouch->event_type) {
++       case XENKBD_MT_EV_DOWN:
++               input_mt_report_slot_state(info->mtouch, MT_TOOL_FINGER, true);
++               /* fall through */
++
++       case XENKBD_MT_EV_MOTION:
++               input_report_abs(info->mtouch, ABS_MT_POSITION_X,
++                                mtouch->u.pos.abs_x);
++               input_report_abs(info->mtouch, ABS_MT_POSITION_Y,
++                                mtouch->u.pos.abs_y);
++               break;
++
++       case XENKBD_MT_EV_SHAPE:
++               input_report_abs(info->mtouch, ABS_MT_TOUCH_MAJOR,
++                                mtouch->u.shape.major);
++               input_report_abs(info->mtouch, ABS_MT_TOUCH_MINOR,
++                                mtouch->u.shape.minor);
++               break;
++
++       case XENKBD_MT_EV_ORIENT:
++               input_report_abs(info->mtouch, ABS_MT_ORIENTATION,
++                                mtouch->u.orientation);
++               break;
++
++       case XENKBD_MT_EV_UP:
++               input_mt_report_slot_state(info->mtouch, MT_TOOL_FINGER, false);
++               break;
++
++       case XENKBD_MT_EV_SYN:
++               input_mt_sync_frame(info->mtouch);
++               input_sync(info->mtouch);
++               break;
++       }
++}
++
++static void xenkbd_handle_event(struct xenkbd_info *info,
++                               union xenkbd_in_event *event)
++{
++       switch (event->type) {
++       case XENKBD_TYPE_MOTION:
++               xenkbd_handle_motion_event(info, &event->motion);
++               break;
++
++       case XENKBD_TYPE_KEY:
++               xenkbd_handle_key_event(info, &event->key);
++               break;
++
++       case XENKBD_TYPE_POS:
++               xenkbd_handle_position_event(info, &event->pos);
++               break;
++
++       case XENKBD_TYPE_MTOUCH:
++               xenkbd_handle_mt_event(info, &event->mtouch);
++               break;
++       }
++}
++
+ static irqreturn_t input_handler(int rq, void *dev_id)
+ {
+ 	struct xenkbd_info *info = dev_id;
+@@ -70,98 +176,8 @@ static irqreturn_t input_handler(int rq, void *dev_id)
+ 	if (prod == page->in_cons)
+ 		return IRQ_HANDLED;
+ 	rmb();			/* ensure we see ring contents up to prod */
+-	for (cons = page->in_cons; cons != prod; cons++) {
+-		union xenkbd_in_event *event;
+-		struct input_dev *dev;
+-		event = &XENKBD_IN_RING_REF(page, cons);
+-
+-		dev = info->ptr;
+-		switch (event->type) {
+-		case XENKBD_TYPE_MOTION:
+-			input_report_rel(dev, REL_X, event->motion.rel_x);
+-			input_report_rel(dev, REL_Y, event->motion.rel_y);
+-			if (event->motion.rel_z)
+-				input_report_rel(dev, REL_WHEEL,
+-						 -event->motion.rel_z);
+-			break;
+-		case XENKBD_TYPE_KEY:
+-			dev = NULL;
+-			if (test_bit(event->key.keycode, info->kbd->keybit))
+-				dev = info->kbd;
+-			if (test_bit(event->key.keycode, info->ptr->keybit))
+-				dev = info->ptr;
+-			if (dev)
+-				input_report_key(dev, event->key.keycode,
+-						 event->key.pressed);
+-			else
+-				pr_warning("unhandled keycode 0x%x\n",
+-					   event->key.keycode);
+-			break;
+-		case XENKBD_TYPE_POS:
+-			input_report_abs(dev, ABS_X, event->pos.abs_x);
+-			input_report_abs(dev, ABS_Y, event->pos.abs_y);
+-			if (event->pos.rel_z)
+-				input_report_rel(dev, REL_WHEEL,
+-						 -event->pos.rel_z);
+-			break;
+-		case XENKBD_TYPE_MTOUCH:
+-			dev = info->mtouch;
+-			if (unlikely(!dev))
+-				break;
+-			if (event->mtouch.contact_id !=
+-					info->mtouch_cur_contact_id) {
+-				info->mtouch_cur_contact_id =
+-					event->mtouch.contact_id;
+-				input_mt_slot(dev, event->mtouch.contact_id);
+-			}
+-			switch (event->mtouch.event_type) {
+-			case XENKBD_MT_EV_DOWN:
+-				input_mt_report_slot_state(dev, MT_TOOL_FINGER,
+-							   true);
+-				input_event(dev, EV_ABS, ABS_MT_POSITION_X,
+-					    event->mtouch.u.pos.abs_x);
+-				input_event(dev, EV_ABS, ABS_MT_POSITION_Y,
+-					    event->mtouch.u.pos.abs_y);
+-				input_event(dev, EV_ABS, ABS_X,
+-					    event->mtouch.u.pos.abs_x);
+-				input_event(dev, EV_ABS, ABS_Y,
+-					    event->mtouch.u.pos.abs_y);
+-				break;
+-			case XENKBD_MT_EV_UP:
+-				input_mt_report_slot_state(dev, MT_TOOL_FINGER,
+-							   false);
+-				break;
+-			case XENKBD_MT_EV_MOTION:
+-				input_event(dev, EV_ABS, ABS_MT_POSITION_X,
+-					    event->mtouch.u.pos.abs_x);
+-				input_event(dev, EV_ABS, ABS_MT_POSITION_Y,
+-					    event->mtouch.u.pos.abs_y);
+-				input_event(dev, EV_ABS, ABS_X,
+-					    event->mtouch.u.pos.abs_x);
+-				input_event(dev, EV_ABS, ABS_Y,
+-					    event->mtouch.u.pos.abs_y);
+-				break;
+-			case XENKBD_MT_EV_SYN:
+-				input_mt_sync_frame(dev);
+-				break;
+-			case XENKBD_MT_EV_SHAPE:
+-				input_event(dev, EV_ABS, ABS_MT_TOUCH_MAJOR,
+-					    event->mtouch.u.shape.major);
+-				input_event(dev, EV_ABS, ABS_MT_TOUCH_MINOR,
+-					    event->mtouch.u.shape.minor);
+-				break;
+-			case XENKBD_MT_EV_ORIENT:
+-				input_event(dev, EV_ABS, ABS_MT_ORIENTATION,
+-					    event->mtouch.u.orientation);
+-				break;
+-			}
+-			/* only report syn when requested */
+-			if (event->mtouch.event_type != XENKBD_MT_EV_SYN)
+-				dev = NULL;
+-		}
+-		if (dev)
+-			input_sync(dev);
+-	}
++	for (cons = page->in_cons; cons != prod; cons++)
++		xenkbd_handle_event(info, &XENKBD_IN_RING_REF(page, cons));
+ 	mb();			/* ensure we got ring contents */
+ 	page->in_cons = cons;
+ 	notify_remote_via_irq(info->irq);
+@@ -216,7 +232,7 @@ static int xenkbd_probe(struct xenbus_device *dev,
+ 		ret = xenbus_write(XBT_NIL, dev->nodename,
+ 				   XENKBD_FIELD_REQ_MTOUCH, "1");
+ 		if (ret) {
+-			pr_warning("xenkbd: can't request multi-touch");
++			pr_warn("xenkbd: can't request multi-touch");
+ 			touch = 0;
+ 		}
+ 	}
+@@ -301,14 +317,6 @@ static int xenkbd_probe(struct xenbus_device *dev,
+ 		mtouch->id.vendor = 0x5853;
+ 		mtouch->id.product = 0xfffd;
+ 
+-		input_set_capability(mtouch, EV_KEY, BTN_TOUCH);
+-		input_set_abs_params(mtouch, ABS_X,
+-				     0, width, 0, 0);
+-		input_set_abs_params(mtouch, ABS_Y,
+-				     0, height, 0, 0);
+-		input_set_abs_params(mtouch, ABS_PRESSURE,
+-				     0, 255, 0, 0);
+-
+ 		input_set_abs_params(mtouch, ABS_MT_TOUCH_MAJOR,
+ 				     0, 255, 0, 0);
+ 		input_set_abs_params(mtouch, ABS_MT_POSITION_X,
+-- 
+2.7.4
+
