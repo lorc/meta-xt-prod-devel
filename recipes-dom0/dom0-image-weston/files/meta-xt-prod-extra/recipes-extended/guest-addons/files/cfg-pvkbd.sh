@@ -51,8 +51,8 @@ $XSWRITE /local/domain/$BACKEND_ID/backend/$PVDEV_NAME/$FRONTEND_ID/$DEV_ID/widt
 $XSWRITE /local/domain/$BACKEND_ID/backend/$PVDEV_NAME/$FRONTEND_ID/$DEV_ID/height 1024
 
 $XSWRITE /local/domain/$FRONTEND_ID/device/$PVDEV_NAME/$DEV_ID/feature-multi-touch 1
-$XSWRITE /local/domain/$FRONTEND_ID/device/$PVDEV_NAME/$DEV_ID/multi-touch-width 3200
-$XSWRITE /local/domain/$FRONTEND_ID/device/$PVDEV_NAME/$DEV_ID/multi-touch-height 2047
+$XSWRITE /local/domain/$FRONTEND_ID/device/$PVDEV_NAME/$DEV_ID/multi-touch-width 1024
+$XSWRITE /local/domain/$FRONTEND_ID/device/$PVDEV_NAME/$DEV_ID/multi-touch-height 768
 $XSWRITE /local/domain/$FRONTEND_ID/device/$PVDEV_NAME/$DEV_ID/multi-touch-num-contacts 10
 
 $XSWRITE /local/domain/$BACKEND_ID/backend/$PVDEV_NAME/$FRONTEND_ID/$DEV_ID/state 2
