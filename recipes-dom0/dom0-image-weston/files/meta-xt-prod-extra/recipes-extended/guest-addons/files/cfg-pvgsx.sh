@@ -36,8 +36,9 @@ usage () {
 # no default parameters, if not 2 then quit
 [ $# -eq 2 ] || usage
 
+$XSWRITE /local/domain/$FRONTEND_ID/device/$PVDEV_NAME/$DEV_ID/osid $OSID
+
 # Configure PV generic entries
 ./cfg-pvback.sh $PVDEV_NAME $FRONTEND_ID $BACKEND_ID $DEV_ID
 
-$XSWRITE /local/domain/$FRONTEND_ID/device/$PVDEV_NAME/$DEV_ID/osid $OSID
 
