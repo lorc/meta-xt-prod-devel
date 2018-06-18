@@ -1,6 +1,9 @@
 require kernel-module-gles.inc
 
-BRANCH = "1.9/4991288-4.9"
+PVRKM_URL = "git://git@gitpct.epam.com/Oleksandr_Andrushchenko/pvr_km_vgpu_img.git"
+BRANCH = "pr_ipmmu_osid"
+
+#BRANCH = "1.9/4991288-4.9"
 SRCREV = "${AUTOREV}"
 
 KBUILD_OUTDIR_r8a7795-es2 = "binary_r8a7795_es2_linux_${BUILD}/target_aarch64/kbuild/"
