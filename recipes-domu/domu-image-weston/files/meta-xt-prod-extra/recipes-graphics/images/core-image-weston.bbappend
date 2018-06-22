@@ -1,6 +1,7 @@
 IMAGE_INSTALL_append = " \
     pulseaudio \
     alsa-utils \
+    kernel-modules \
     kmscube \
 "
 
@@ -24,4 +25,3 @@ populate_vmlinux () {
 }
 
 IMAGE_POSTPROCESS_COMMAND += "populate_vmlinux; "
-

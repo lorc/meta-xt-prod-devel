@@ -8,6 +8,10 @@ SRC_URI = " \
     repo://github.com/iartemenko/manifests;protocol=https;branch=pr_testv3;manifest=prod_gen3_test/domu.xml;scmdata=keep \
 "
 
+SRC_URI_append = " \
+    git://github.com/kraj/meta-clang.git;destsuffix=repo/meta-clang;branch=rocko \
+"
+
 XT_QUIRK_UNPACK_SRC_URI += " \
     file://meta-xt-prod-extra;subdir=repo \
     file://xt_shared_env.inc;subdir=repo/meta-xt-prod-extra/inc \
@@ -19,10 +23,6 @@ XT_QUIRK_BB_ADD_LAYER += " \
 "
 
 XT_BB_IMAGE_TARGET = "core-image-weston"
-
-SRC_URI_append = " \
-    git://github.com/kraj/meta-clang.git;destsuffix=repo/meta-clang;branch=rocko \
-"
 
 ################################################################################
 # Renesas R-Car
@@ -46,8 +46,12 @@ configure_versions_rcar() {
 
     cd ${S}
     if [ -z ${XT_RCAR_EVAPROPRIETARY_DIR} ];then
+        base_update_conf_value ${local_conf} PREFERRED_PROVIDER_gles-user-module "gles-user-module"
         base_update_conf_value ${local_conf} PREFERRED_VERSION_gles-user-module ${GLES_VERSION}
+
+        base_update_conf_value ${local_conf} PREFERRED_PROVIDER_kernel-module-gles "kernel-module-gles"
         base_update_conf_value ${local_conf} PREFERRED_VERSION_gles-kernel-module ${GLES_VERSION}
+
         base_update_conf_value ${local_conf} PREFERRED_VERSION_gles-module-egl-headers ${GLES_VERSION}
         base_add_conf_value ${local_conf} EXTRA_IMAGEDEPENDS "prepare-graphic-package"
     else
